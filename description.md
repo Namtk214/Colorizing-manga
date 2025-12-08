@@ -15,22 +15,33 @@ This guide explains how to download and set up the required models for MangaNinj
 We've created an automated download script that handles most model downloads for you.
 
 #### Step 1: Install Dependencies
+
+**Option A: Using compatible requirements file (Recommended):**
 ```bash
-pip install torch torchvision diffusers==0.27.2 transformers omegaconf gradio pillow opencv-python numpy==1.26.4 accelerate einops huggingface-hub
+pip install -r requirements_compatible.txt
 ```
 
-**Note:** Use `diffusers==0.27.2` and `numpy==1.26.4` for compatibility.
+**Option B: Manual installation:**
+```bash
+pip install torch torchvision diffusers==0.27.2 transformers omegaconf gradio pillow opencv-python numpy==1.26.4 accelerate einops huggingface-hub==0.24.6
+```
+
+**Note:** Use `diffusers==0.27.2`, `numpy==1.26.4`, and `huggingface-hub==0.24.6` for compatibility.
 
 #### Step 2: Run the Download Script
 ```bash
-python download_models.py
+python download_models_v2.py
 ```
 
 This script will:
-- ✅ Check if MangaNinjia custom models exist
-- ✅ Download annotator models from HuggingFace
-- ✅ Verify access to HuggingFace models
-- ✅ Display detailed status for each component
+- ✅ Create the exact directory structure from README.md
+- ✅ Download Stable Diffusion v1.5 to `./checkpoints/StableDiffusion`
+- ✅ Download CLIP model to `./checkpoints/models/clip-vit-large-patch14`
+- ✅ Download ControlNet to `./checkpoints/models/control_v11p_sd15_lineart`
+- ✅ Download Annotator models to `./checkpoints/models/Annotators`
+- ✅ Download MangaNinjia models to `./checkpoints/MangaNinjia`
+- ✅ Update inference.yaml with local paths
+- ✅ Verify complete directory structure
 
 #### Step 3: Run the Application
 ```bash
@@ -47,43 +58,48 @@ If the automated script fails, you can download models manually:
 
 #### Required Models Structure:
 ```
-checkpoints/
-├── MangaNinjia/                 # Custom trained models (required)
-│   ├── controlnet.pth
-│   ├── denoising_unet.pth
-│   ├── point_net.pth
-│   └── reference_unet.pth
-└── models/
-    └── Annotators/              # Line art detection models
-        ├── sk_model.pth
-        └── sk_model2.pth
+-- checkpoints
+    |-- StableDiffusion          # Stable Diffusion v1.5 base model
+    |-- models
+        |-- clip-vit-large-patch14       # CLIP vision model
+        |-- control_v11p_sd15_lineart    # ControlNet for line art
+        |-- Annotators
+            |--sk_model.pth              # Line art detection models
+            |--sk_model2.pth
+    |-- MangaNinjia              # Custom trained models
+        |-- denoising_unet.pth
+        |-- reference_unet.pth
+        |-- point_net.pth
+        |-- controlnet.pth
 ```
 
 #### Manual Download Steps:
 
-1. **MangaNinjia Custom Models** (Must be provided separately):
+1. **Download all models from HuggingFace**:
    ```bash
-   # Ensure these files exist in checkpoints/MangaNinjia/
-   ls checkpoints/MangaNinjia/
-   # Should show: controlnet.pth, denoising_unet.pth, point_net.pth, reference_unet.pth
-   ```
-
-2. **Annotator Models**:
-   ```bash
+   # Create directory structure
+   mkdir -p checkpoints/StableDiffusion
+   mkdir -p checkpoints/models/clip-vit-large-patch14
+   mkdir -p checkpoints/models/control_v11p_sd15_lineart
    mkdir -p checkpoints/models/Annotators
+   mkdir -p checkpoints/MangaNinjia
    
-   # Download from HuggingFace
-   wget -O checkpoints/models/Annotators/sk_model.pth \
+   # Download using git lfs (requires git-lfs installed)
+   cd checkpoints
+   
+   git clone https://huggingface.co/runwayml/stable-diffusion-v1-5 StableDiffusion
+   git clone https://huggingface.co/openai/clip-vit-large-patch14 models/clip-vit-large-patch14
+   git clone https://huggingface.co/lllyasviel/control_v11p_sd15_lineart models/control_v11p_sd15_lineart
+   git clone https://huggingface.co/Johanan0528/MangaNinjia MangaNinjia
+   
+   # Download annotator models
+   wget -O models/Annotators/sk_model.pth \
      "https://huggingface.co/lllyasviel/Annotators/resolve/main/sk_model.pth"
-   
-   wget -O checkpoints/models/Annotators/sk_model2.pth \
+   wget -O models/Annotators/sk_model2.pth \
      "https://huggingface.co/lllyasviel/Annotators/resolve/main/sk_model2.pth"
+   
+   cd ..
    ```
-
-3. **HuggingFace Models** (Downloaded automatically when needed):
-   - `runwayml/stable-diffusion-v1-5`
-   - `openai/clip-vit-large-patch14`
-   - `lllyasviel/control_v11p_sd15_lineart`
 
 ## Configuration
 
@@ -91,9 +107,9 @@ The model paths are configured in `configs/inference.yaml`:
 
 ```yaml
 model_path:
-  pretrained_model_name_or_path: runwayml/stable-diffusion-v1-5
-  clip_vision_encoder_path: openai/clip-vit-large-patch14
-  controlnet_model_name: lllyasviel/control_v11p_sd15_lineart
+  pretrained_model_name_or_path: ./checkpoints/StableDiffusion
+  clip_vision_encoder_path: ./checkpoints/models/clip-vit-large-patch14
+  controlnet_model_name: ./checkpoints/models/control_v11p_sd15_lineart
   annotator_ckpts_path: ./checkpoints/models/Annotators
   manga_control_model_path: ./checkpoints/MangaNinjia/controlnet.pth
   manga_reference_model_path: ./checkpoints/MangaNinjia/reference_unet.pth
@@ -121,12 +137,18 @@ model_path:
 
 ### Common Issues:
 
-1. **ImportError with diffusers**:
+1. **ImportError: cannot import name 'cached_download' from 'huggingface_hub'**:
+   ```bash
+   pip install huggingface-hub==0.24.6
+   pip install diffusers==0.27.2
+   ```
+
+2. **ImportError with diffusers**:
    ```bash
    pip install diffusers==0.27.2
    ```
 
-2. **NumPy compatibility issues**:
+3. **NumPy compatibility issues**:
    ```bash
    pip install numpy==1.26.4
    ```

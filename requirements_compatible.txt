@@ -1,0 +1,15 @@
+torch>=2.0.0
+torchvision>=0.15.0
+diffusers==0.27.2
+transformers>=4.44.0
+huggingface-hub==0.24.6
+numpy==1.26.4
+omegaconf>=2.3.0
+gradio>=3.39.0
+pillow>=10.0.0
+opencv-python>=4.8.0
+accelerate>=0.31.0
+einops>=0.8.0
+imageio>=2.35.0
+tqdm>=4.66.0
+basicsr>=1.3.5

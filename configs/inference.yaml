@@ -1,7 +1,7 @@
 model_path:
-  pretrained_model_name_or_path: runwayml/stable-diffusion-v1-5
-  clip_vision_encoder_path: openai/clip-vit-large-patch14
-  controlnet_model_name: lllyasviel/control_v11p_sd15_lineart
+  pretrained_model_name_or_path: ./checkpoints/StableDiffusion
+  clip_vision_encoder_path: ./checkpoints/models/clip-vit-large-patch14
+  controlnet_model_name: ./checkpoints/models/control_v11p_sd15_lineart
   annotator_ckpts_path: ./checkpoints/models/Annotators
   manga_control_model_path: ./checkpoints/MangaNinjia/controlnet.pth
   manga_reference_model_path: ./checkpoints/MangaNinjia/reference_unet.pth

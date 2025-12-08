@@ -1,0 +1,293 @@
+#!/usr/bin/env python3
+"""
+Download script for required models in MangaNinja
+Creates the exact folder structure as specified in README.md:
+
+-- checkpoints
+    |-- StableDiffusion
+    |-- models
+        |-- clip-vit-large-patch14
+        |-- control_v11p_sd15_lineart
+        |-- Annotators
+            |--sk_model.pth
+    |-- MangaNinjia
+        |-- denoising_unet.pth
+        |-- reference_unet.pth
+        |-- point_net.pth
+        |-- controlnet.pth
+"""
+import os
+import sys
+import logging
+import shutil
+from pathlib import Path
+from huggingface_hub import hf_hub_download, snapshot_download
+from omegaconf import OmegaConf
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+def ensure_dir(path):
+    """Create directory if it doesn't exist"""
+    Path(path).mkdir(parents=True, exist_ok=True)
+
+def download_stable_diffusion():
+    """Download Stable Diffusion v1.5 model"""
+    model_path = "./checkpoints/StableDiffusion"
+    
+    if os.path.exists(model_path) and os.listdir(model_path):
+        logger.info(f"✓ StableDiffusion already exists at {model_path}")
+        return True
+    
+    ensure_dir(model_path)
+    logger.info("Downloading Stable Diffusion v1.5...")
+    
+    try:
+        snapshot_download(
+            repo_id="runwayml/stable-diffusion-v1-5",
+            local_dir=model_path,
+            ignore_patterns=["*.safetensors", "*.ckpt"]  # Skip large safetensors files, keep configs
+        )
+        logger.info("✓ Stable Diffusion downloaded successfully")
+        return True
+    except Exception as e:
+        logger.error(f"✗ Failed to download Stable Diffusion: {e}")
+        return False
+
+def download_clip_model():
+    """Download CLIP ViT Large model"""
+    model_path = "./checkpoints/models/clip-vit-large-patch14"
+    
+    if os.path.exists(model_path) and os.listdir(model_path):
+        logger.info(f"✓ CLIP model already exists at {model_path}")
+        return True
+    
+    ensure_dir(model_path)
+    logger.info("Downloading CLIP ViT-Large-Patch14...")
+    
+    try:
+        snapshot_download(
+            repo_id="openai/clip-vit-large-patch14",
+            local_dir=model_path
+        )
+        logger.info("✓ CLIP model downloaded successfully")
+        return True
+    except Exception as e:
+        logger.error(f"✗ Failed to download CLIP model: {e}")
+        return False
+
+def download_controlnet():
+    """Download ControlNet lineart model"""
+    model_path = "./checkpoints/models/control_v11p_sd15_lineart"
+    
+    if os.path.exists(model_path) and os.listdir(model_path):
+        logger.info(f"✓ ControlNet already exists at {model_path}")
+        return True
+    
+    ensure_dir(model_path)
+    logger.info("Downloading ControlNet lineart model...")
+    
+    try:
+        snapshot_download(
+            repo_id="lllyasviel/control_v11p_sd15_lineart",
+            local_dir=model_path
+        )
+        logger.info("✓ ControlNet downloaded successfully")
+        return True
+    except Exception as e:
+        logger.error(f"✗ Failed to download ControlNet: {e}")
+        return False
+
+def download_annotator_models():
+    """Download annotator models from HuggingFace"""
+    annotator_path = "./checkpoints/models/Annotators"
+    ensure_dir(annotator_path)
+    
+    models_to_download = [
+        "sk_model.pth",
+        "sk_model2.pth"
+    ]
+    
+    success_count = 0
+    for model_name in models_to_download:
+        model_path = os.path.join(annotator_path, model_name)
+        if os.path.exists(model_path):
+            logger.info(f"✓ {model_name} already exists")
+            success_count += 1
+            continue
+            
+        logger.info(f"Downloading {model_name}...")
+        try:
+            hf_hub_download(
+                repo_id="lllyasviel/Annotators",
+                filename=model_name,
+                local_dir=annotator_path,
+                local_dir_use_symlinks=False
+            )
+            logger.info(f"✓ Downloaded {model_name}")
+            success_count += 1
+        except Exception as e:
+            logger.error(f"✗ Failed to download {model_name}: {e}")
+    
+    return success_count == len(models_to_download)
+
+def download_manganinja_models():
+    """Download MangaNinja custom models"""
+    model_path = "./checkpoints/MangaNinjia"
+    
+    # Check if models already exist
+    required_files = [
+        "denoising_unet.pth",
+        "reference_unet.pth", 
+        "point_net.pth",
+        "controlnet.pth"
+    ]
+    
+    existing_files = []
+    for file in required_files:
+        file_path = os.path.join(model_path, file)
+        if os.path.exists(file_path):
+            existing_files.append(file)
+    
+    if len(existing_files) == len(required_files):
+        logger.info("✓ All MangaNinja models already exist")
+        return True
+    
+    ensure_dir(model_path)
+    logger.info("Downloading MangaNinja custom models...")
+    
+    try:
+        snapshot_download(
+            repo_id="Johanan0528/MangaNinjia",
+            local_dir=model_path
+        )
+        
+        # Verify all required files are present
+        missing_files = []
+        for file in required_files:
+            file_path = os.path.join(model_path, file)
+            if not os.path.exists(file_path):
+                missing_files.append(file)
+        
+        if missing_files:
+            logger.warning(f"Some files are missing: {missing_files}")
+            return False
+        
+        logger.info("✓ MangaNinja models downloaded successfully")
+        return True
+        
+    except Exception as e:
+        logger.error(f"✗ Failed to download MangaNinja models: {e}")
+        logger.info("Please download the models manually from https://huggingface.co/Johanan0528/MangaNinjia")
+        return False
+
+def update_config_paths():
+    """Update inference.yaml to use local paths"""
+    config_path = "./configs/inference.yaml"
+    
+    try:
+        config = OmegaConf.load(config_path)
+        
+        # Update paths to local directories
+        config.model_path.pretrained_model_name_or_path = "./checkpoints/StableDiffusion"
+        config.model_path.clip_vision_encoder_path = "./checkpoints/models/clip-vit-large-patch14"
+        config.model_path.controlnet_model_name = "./checkpoints/models/control_v11p_sd15_lineart"
+        config.model_path.annotator_ckpts_path = "./checkpoints/models/Annotators"
+        
+        # Save updated config
+        OmegaConf.save(config, config_path)
+        logger.info("✓ Updated inference.yaml with local paths")
+        return True
+        
+    except Exception as e:
+        logger.error(f"✗ Failed to update config: {e}")
+        return False
+
+def verify_directory_structure():
+    """Verify the downloaded directory structure matches README requirements"""
+    logger.info("Verifying directory structure...")
+    
+    expected_structure = {
+        "./checkpoints/StableDiffusion": "directory",
+        "./checkpoints/models/clip-vit-large-patch14": "directory", 
+        "./checkpoints/models/control_v11p_sd15_lineart": "directory",
+        "./checkpoints/models/Annotators/sk_model.pth": "file",
+        "./checkpoints/MangaNinjia/denoising_unet.pth": "file",
+        "./checkpoints/MangaNinjia/reference_unet.pth": "file",
+        "./checkpoints/MangaNinjia/point_net.pth": "file",
+        "./checkpoints/MangaNinjia/controlnet.pth": "file"
+    }
+    
+    all_good = True
+    for path, path_type in expected_structure.items():
+        if path_type == "directory":
+            if os.path.isdir(path) and os.listdir(path):
+                logger.info(f"✓ {path} (directory with contents)")
+            else:
+                logger.error(f"✗ {path} (missing or empty directory)")
+                all_good = False
+        else:  # file
+            if os.path.isfile(path):
+                logger.info(f"✓ {path}")
+            else:
+                logger.error(f"✗ {path} (missing file)")
+                all_good = False
+    
+    return all_good
+
+def main():
+    """Main download function"""
+    logger.info("Starting MangaNinja model download process...")
+    logger.info("This will create the directory structure specified in README.md")
+    
+    # Download all components
+    tasks = [
+        ("Stable Diffusion", download_stable_diffusion),
+        ("CLIP Model", download_clip_model),
+        ("ControlNet", download_controlnet),
+        ("Annotator Models", download_annotator_models),
+        ("MangaNinja Models", download_manganinja_models),
+    ]
+    
+    results = {}
+    for task_name, task_func in tasks:
+        logger.info(f"\n--- Downloading {task_name} ---")
+        results[task_name] = task_func()
+    
+    # Update config file
+    logger.info("\n--- Updating Configuration ---")
+    results["Config Update"] = update_config_paths()
+    
+    # Verify structure
+    logger.info("\n--- Verifying Structure ---")
+    structure_ok = verify_directory_structure()
+    
+    # Summary
+    logger.info("\n" + "="*50)
+    logger.info("DOWNLOAD SUMMARY")
+    logger.info("="*50)
+    
+    for task_name, success in results.items():
+        status = "✓ SUCCESS" if success else "✗ FAILED"
+        logger.info(f"{task_name}: {status}")
+    
+    if structure_ok and all(results.values()):
+        logger.info("\n🎉 All models downloaded successfully!")
+        logger.info("You can now run: python run_gradio.py")
+        return True
+    else:
+        logger.error("\n❌ Some downloads failed. Please check the logs above.")
+        logger.info("You may need to download some models manually.")
+        return False
+
+if __name__ == "__main__":
+    try:
+        success = main()
+        sys.exit(0 if success else 1)
+    except KeyboardInterrupt:
+        logger.info("Download interrupted by user")
+        sys.exit(1)
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}")
+        sys.exit(1)
