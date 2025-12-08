@@ -159,13 +159,18 @@ model_path:
    ```
    This is normal on systems without CUDA GPUs.
 
-4. **Missing MangaNinjia models**:
+4. **Missing model weights** (Error: no file named diffusion_pytorch_model.bin found):
+   ```bash
+   python download_missing_weights.py
+   ```
+
+5. **Missing MangaNinjia models**:
    - Ensure all 4 `.pth` files are in `checkpoints/MangaNinjia/`
    - These are custom trained models that must be provided separately
 
-5. **Download failures**:
+6. **Download failures**:
    - Check internet connection
-   - Try running `python download_models.py` again
+   - Try running `python download_models_v2.py` again
    - Use manual download method as backup
 
 ### Verification Commands:

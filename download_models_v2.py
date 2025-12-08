@@ -36,21 +36,61 @@ def download_stable_diffusion():
     """Download Stable Diffusion v1.5 model"""
     model_path = "./checkpoints/StableDiffusion"
     
-    if os.path.exists(model_path) and os.listdir(model_path):
-        logger.info(f"✓ StableDiffusion already exists at {model_path}")
+    # Check if all required files exist
+    required_files = [
+        "vae/diffusion_pytorch_model.bin",
+        "unet/diffusion_pytorch_model.bin", 
+        "text_encoder/pytorch_model.bin",
+        "model_index.json",
+        "scheduler/scheduler_config.json"
+    ]
+    
+    missing_files = []
+    for file_path in required_files:
+        full_path = os.path.join(model_path, file_path)
+        if not os.path.exists(full_path):
+            missing_files.append(file_path)
+    
+    if not missing_files:
+        logger.info(f"✓ StableDiffusion already complete at {model_path}")
         return True
     
     ensure_dir(model_path)
     logger.info("Downloading Stable Diffusion v1.5...")
+    logger.info(f"Missing files: {missing_files}")
     
     try:
         snapshot_download(
             repo_id="runwayml/stable-diffusion-v1-5",
             local_dir=model_path,
-            ignore_patterns=["*.safetensors", "*.ckpt"]  # Skip large safetensors files, keep configs
+            # Don't ignore any patterns to ensure all files are downloaded
         )
+        
+        # Verify all required files are now present
+        still_missing = []
+        for file_path in required_files:
+            full_path = os.path.join(model_path, file_path)
+            if not os.path.exists(full_path):
+                still_missing.append(file_path)
+        
+        if still_missing:
+            logger.warning(f"Some files are still missing: {still_missing}")
+            # Try to download missing files individually
+            for file_path in still_missing:
+                try:
+                    hf_hub_download(
+                        repo_id="runwayml/stable-diffusion-v1-5",
+                        filename=file_path,
+                        local_dir=model_path,
+                        local_dir_use_symlinks=False
+                    )
+                    logger.info(f"✓ Downloaded {file_path}")
+                except Exception as e:
+                    logger.error(f"✗ Failed to download {file_path}: {e}")
+        
         logger.info("✓ Stable Diffusion downloaded successfully")
         return True
+        
     except Exception as e:
         logger.error(f"✗ Failed to download Stable Diffusion: {e}")
         return False
@@ -208,31 +248,46 @@ def verify_directory_structure():
     """Verify the downloaded directory structure matches README requirements"""
     logger.info("Verifying directory structure...")
     
-    expected_structure = {
-        "./checkpoints/StableDiffusion": "directory",
-        "./checkpoints/models/clip-vit-large-patch14": "directory", 
-        "./checkpoints/models/control_v11p_sd15_lineart": "directory",
-        "./checkpoints/models/Annotators/sk_model.pth": "file",
-        "./checkpoints/MangaNinjia/denoising_unet.pth": "file",
-        "./checkpoints/MangaNinjia/reference_unet.pth": "file",
-        "./checkpoints/MangaNinjia/point_net.pth": "file",
-        "./checkpoints/MangaNinjia/controlnet.pth": "file"
+    # Check critical model weight files
+    critical_files = {
+        "./checkpoints/StableDiffusion/vae/diffusion_pytorch_model.bin": "Stable Diffusion VAE weights",
+        "./checkpoints/StableDiffusion/unet/diffusion_pytorch_model.bin": "Stable Diffusion UNet weights",
+        "./checkpoints/StableDiffusion/text_encoder/pytorch_model.bin": "Stable Diffusion text encoder weights",
+        "./checkpoints/models/Annotators/sk_model.pth": "Annotator model",
+        "./checkpoints/MangaNinjia/denoising_unet.pth": "MangaNinjia denoising UNet",
+        "./checkpoints/MangaNinjia/reference_unet.pth": "MangaNinjia reference UNet",
+        "./checkpoints/MangaNinjia/point_net.pth": "MangaNinjia point network",
+        "./checkpoints/MangaNinjia/controlnet.pth": "MangaNinjia ControlNet"
+    }
+    
+    # Check directories with contents
+    directories_with_contents = {
+        "./checkpoints/StableDiffusion": "Stable Diffusion base model",
+        "./checkpoints/models/clip-vit-large-patch14": "CLIP vision model", 
+        "./checkpoints/models/control_v11p_sd15_lineart": "ControlNet lineart model"
     }
     
     all_good = True
-    for path, path_type in expected_structure.items():
-        if path_type == "directory":
-            if os.path.isdir(path) and os.listdir(path):
-                logger.info(f"✓ {path} (directory with contents)")
-            else:
-                logger.error(f"✗ {path} (missing or empty directory)")
-                all_good = False
-        else:  # file
-            if os.path.isfile(path):
-                logger.info(f"✓ {path}")
-            else:
-                logger.error(f"✗ {path} (missing file)")
-                all_good = False
+    
+    # Check critical files
+    logger.info("Checking critical model files...")
+    for file_path, description in critical_files.items():
+        if os.path.isfile(file_path):
+            file_size = os.path.getsize(file_path) // (1024*1024)  # Size in MB
+            logger.info(f"✓ {description}: {file_path} ({file_size} MB)")
+        else:
+            logger.error(f"✗ {description}: {file_path} (missing)")
+            all_good = False
+    
+    # Check directories
+    logger.info("Checking model directories...")
+    for dir_path, description in directories_with_contents.items():
+        if os.path.isdir(dir_path) and os.listdir(dir_path):
+            file_count = len(os.listdir(dir_path))
+            logger.info(f"✓ {description}: {dir_path} ({file_count} files)")
+        else:
+            logger.error(f"✗ {description}: {dir_path} (missing or empty)")
+            all_good = False
     
     return all_good
 
