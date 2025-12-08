@@ -241,11 +241,13 @@ def concatenate_reference_images(ref_images):
     if len(resized_images) == 0:
         return None
     elif len(resized_images) == 1:
-        return resized_images[0]
+        return resized_images[0]  # Already 256x256
     else:
         # Concatenate horizontally
         concatenated = np.hstack(resized_images)
-        return concatenated
+        # Resize the concatenated image back to 256x256
+        final_result = cv2.resize(concatenated, (256, 256))
+        return final_result
 
 # Convert string to numpy array of coordinates
 def string_to_np_array(coord_string):
