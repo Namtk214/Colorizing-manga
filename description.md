@@ -47,16 +47,18 @@ If the automated script fails, you can download models manually:
 
 #### Required Models Structure:
 ```
-checkpoints/
-├── MangaNinjia/                 # Custom trained models (required)
-│   ├── controlnet.pth
-│   ├── denoising_unet.pth
-│   ├── point_net.pth
-│   └── reference_unet.pth
-└── models/
-    └── Annotators/              # Line art detection models
-        ├── sk_model.pth
-        └── sk_model2.pth
+-- checkpoints
+    |-- StableDiffusion
+    |-- models
+        |-- clip-vit-large-patch14
+        |-- control_v11p_sd15_lineart
+        |-- Annotators
+            |--sk_model.pth
+    |-- MangaNinjia
+        |-- denoising_unet.pth
+        |-- reference_unet.pth
+        |-- point_net.pth
+        |-- controlnet.pth
 ```
 
 #### Manual Download Steps:
