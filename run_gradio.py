@@ -9,6 +9,7 @@ from omegaconf import OmegaConf
 import numpy as np
 import os
 import re
+import logging
 from PIL import Image, ImageDraw
 import cv2
 #
@@ -26,6 +27,38 @@ from src.models.unet_2d_condition import UNet2DConditionModel
 from src.models.refunet_2d_condition import RefUNet2DConditionModel
 from src.point_network import PointNet
 from src.annotator.lineart import BatchLineartDetector
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+def check_and_download_models():
+    """Check if all required models are available and download if necessary"""
+    try:
+        from download_models import download_all_models, check_manga_models
+        
+        logger.info("Checking model availability...")
+        
+        # Check MangaNinjia models first
+        if not check_manga_models():
+            logger.error("MangaNinjia custom models are missing!")
+            return False
+        
+        # Download other models if needed
+        download_all_models()
+        return True
+        
+    except ImportError:
+        logger.warning("Download script not available. Proceeding with existing models.")
+        return True
+    except Exception as e:
+        logger.error(f"Model check failed: {e}")
+        return False
+
+# Check models before loading configuration
+if not check_and_download_models():
+    logger.error("Model setup failed. Some functionality may not work.")
+
 val_configs = OmegaConf.load('./configs/inference.yaml')
 # === load the checkpoint ===
 pretrained_model_name_or_path = val_configs.model_path.pretrained_model_name_or_path
@@ -133,8 +166,8 @@ def infer_single(is_lineart, ref_image, target_image, output_coords_ref, output_
     image: rgb           np.array
     """
     generator = torch.cuda.manual_seed(seed)
-    matrix1 = np.zeros((512, 512), dtype=np.uint8)
-    matrix2 = np.zeros((512, 512), dtype=np.uint8)
+    matrix1 = np.zeros((256, 256), dtype=np.uint8)
+    matrix2 = np.zeros((256, 256), dtype=np.uint8)
     output_coords_ref = string_to_np_array(output_coords_ref)
     output_coords_base = string_to_np_array(output_coords_base)
     for index, (coords_ref,coords_base) in enumerate(zip(output_coords_ref,output_coords_base)):
@@ -151,7 +184,7 @@ def infer_single(is_lineart, ref_image, target_image, output_coords_ref, output_
         target_image,
         target_image,
         denosing_steps=num_inference_steps,
-        processing_res=512,
+        processing_res=256,
         match_input_res=True,
         batch_size=1,
         show_progress_bar=True,
@@ -187,11 +220,32 @@ max_clicks = 14
 point_size = 8  
 colors = [(255, 0, 0), (0, 255, 0)] 
 
-# Process images: resizing them to 512x512
+# Process images: resizing them to 256x256
 def process_image(ref, base):
-    ref_resized = cv2.resize(ref, (512, 512))  # Note OpenCV resize order is (width, height)
-    base_resized = cv2.resize(base, (512, 512))
+    ref_resized = cv2.resize(ref, (256, 256))  # Note OpenCV resize order is (width, height)
+    base_resized = cv2.resize(base, (256, 256))
     return ref_resized, base_resized
+
+# Concatenate multiple reference images horizontally
+def concatenate_reference_images(ref_images):
+    if not ref_images or len(ref_images) == 0:
+        return None
+    
+    # Resize all images to 256x256
+    resized_images = []
+    for img in ref_images:
+        if img is not None:
+            resized = cv2.resize(img, (256, 256))
+            resized_images.append(resized)
+    
+    if len(resized_images) == 0:
+        return None
+    elif len(resized_images) == 1:
+        return resized_images[0]
+    else:
+        # Concatenate horizontally
+        concatenated = np.hstack(resized_images)
+        return concatenated
 
 # Convert string to numpy array of coordinates
 def string_to_np_array(coord_string):
@@ -321,15 +375,40 @@ with gr.Blocks() as demo:
                 
                 gr.Markdown("### Tutorial")
                 gr.Markdown("1. Upload the reference image and target image. Note that for the target image, there are two modes: you can upload an RGB image, and the model will automatically extract the line art; or you can directly upload the line art by checking the 'input is lineart' option.")
-                gr.Markdown("2. Click 'Process Images' to resize the images to 512*512 resolution.")
+                gr.Markdown("2. Click 'Process Images' to resize the images to 256*256 resolution.")
                 gr.Markdown("3. (Optional) **Starting from the reference image**, **alternately** click on the reference and target images in sequence to define matching points. Use 'Undo' to revert the last action.")
                 gr.Markdown("4. Click 'Generate' to produce the result.")
-        gr.Markdown("# Upload the reference image and target image")
+        gr.Markdown("# Upload reference images and target image")
         
         with gr.Row():
-            ref = gr.Image(label="Reference Image",)
-            base = gr.Image(label="Target Image",)
-        gr.Button("Process Images").click(process_image, inputs=[ref, base], outputs=[ref, base])
+            ref_images = gr.File(label="Reference Images (Multiple)", file_count="multiple", file_types=[".png", ".jpg", ".jpeg"])
+            ref = gr.Image(label="Concatenated Reference Image", interactive=False)
+            base = gr.Image(label="Target Image")
+        
+        # Function to handle multiple reference image uploads
+        def handle_multiple_refs(files):
+            if not files or len(files) == 0:
+                return None
+            
+            images = []
+            for file in files:
+                try:
+                    img = Image.open(file.name)
+                    img_array = np.array(img)
+                    images.append(img_array)
+                except Exception as e:
+                    print(f"Error loading image {file.name}: {e}")
+                    continue
+            
+            if len(images) == 0:
+                return None
+            
+            concatenated = concatenate_reference_images(images)
+            return concatenated
+        
+        ref_images.upload(handle_multiple_refs, inputs=[ref_images], outputs=[ref])
+        process_btn = gr.Button("Process Images")
+        process_btn.click(process_image, inputs=[ref, base], outputs=[ref, base])
             
         with gr.Row():
             output_img1 = gr.Image(label="Reference Output")

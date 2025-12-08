@@ -8,6 +8,29 @@ from PIL import Image
 from tqdm.auto import tqdm
 from transformers import CLIPTextModel, CLIPTokenizer, CLIPVisionModelWithProjection
 import torch.nn as nn
+
+def check_and_download_models():
+    """Check if all required models are available and download if necessary"""
+    try:
+        from download_models import download_all_models, check_manga_models
+        
+        logging.info("Checking model availability...")
+        
+        # Check MangaNinjia models first
+        if not check_manga_models():
+            logging.error("MangaNinjia custom models are missing!")
+            return False
+        
+        # Download other models if needed
+        download_all_models()
+        return True
+        
+    except ImportError:
+        logging.warning("Download script not available. Proceeding with existing models.")
+        return True
+    except Exception as e:
+        logging.error(f"Model check failed: {e}")
+        return False
 from inference.manganinjia_pipeline import MangaNinjiaPipeline
 from diffusers import (
     ControlNetModel,
@@ -23,6 +46,11 @@ from src.annotator.lineart import BatchLineartDetector
 
 if "__main__" == __name__:
     logging.basicConfig(level=logging.INFO)
+    
+    # Check models before starting inference
+    if not check_and_download_models():
+        logging.error("Model setup failed. Exiting.")
+        exit(1)
 
     # -------------------- Arguments --------------------
     parser = argparse.ArgumentParser(
@@ -243,21 +271,21 @@ if "__main__" == __name__:
                 point_ref = torch.from_numpy(np.load(point_ref_path)).unsqueeze(0).unsqueeze(0)
                 point_main = torch.from_numpy(np.load(point_lineart_path)).unsqueeze(0).unsqueeze(0)
             else:
-                matrix1 = np.zeros((512, 512), dtype=np.uint8)
-                matrix2 = np.zeros((512, 512), dtype=np.uint8)
+                matrix1 = np.zeros((256, 256), dtype=np.uint8)
+                matrix2 = np.zeros((256, 256), dtype=np.uint8)
                 point_ref = torch.from_numpy(matrix1).unsqueeze(0).unsqueeze(0)
                 point_main = torch.from_numpy(matrix2).unsqueeze(0).unsqueeze(0)
             ref_image = Image.open(input_reference_path)
-            ref_image = ref_image.resize((512, 512))
+            ref_image = ref_image.resize((256, 256))
             target_image = Image.open(input_lineart_path)
-            target_image = target_image.resize((512, 512))
+            target_image = target_image.resize((256, 256))
             pipe_out = pipe(
                 is_lineart,
                 ref_image,
                 target_image,
                 target_image,
                 denosing_steps=denoise_steps,
-                processing_res=512,
+                processing_res=256,
                 match_input_res=True,
                 batch_size=1,
                 show_progress_bar=True,
