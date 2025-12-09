@@ -231,11 +231,22 @@ def concatenate_reference_images(ref_images):
     if not ref_images or len(ref_images) == 0:
         return None
     
-    # Resize all images to 256x256
+    # Resize all images to 256x256 and ensure consistent channels
     resized_images = []
     for img in ref_images:
         if img is not None:
             resized = cv2.resize(img, (256, 256))
+            
+            # Convert to RGB if needed (remove alpha channel, ensure 3 channels)
+            if len(resized.shape) == 3:
+                if resized.shape[2] == 4:  # RGBA
+                    resized = cv2.cvtColor(resized, cv2.COLOR_RGBA2RGB)
+                elif resized.shape[2] == 1:  # Grayscale
+                    resized = cv2.cvtColor(resized, cv2.COLOR_GRAY2RGB)
+                # If already RGB (3 channels), keep as is
+            else:  # Grayscale without channel dimension
+                resized = cv2.cvtColor(resized, cv2.COLOR_GRAY2RGB)
+            
             resized_images.append(resized)
     
     if len(resized_images) == 0:
@@ -243,7 +254,7 @@ def concatenate_reference_images(ref_images):
     elif len(resized_images) == 1:
         return resized_images[0]  # Already 256x256
     else:
-        # Concatenate horizontally
+        # Concatenate horizontally (all images now have 3 channels)
         concatenated = np.hstack(resized_images)
         # Resize the concatenated image back to 256x256
         final_result = cv2.resize(concatenated, (256, 256))
